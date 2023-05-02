@@ -1,9 +1,9 @@
 library(igraph)
 library(SparseM)
 library(Matrix)
-###### ###### ###### ###### ###### ###### ###### ###### ###### 
-###### GNAR package modification for edge time series ###### 
-###### ###### ###### ###### ###### ###### ###### ###### ###### 
+###### ###### ###### ###### ###### ###### ###### ###### ###### ###### ###### 
+###### Modification of GNAR model (Knight et al.) for edge time series ###### 
+###### ###### ###### ###### ###### ###### ###### ###### ######  ###### ######
 
 response_vec<-function(ts_data,alphaOrder){
   # ts_data: dataframe with rows edges and columns time
@@ -22,29 +22,27 @@ design_mat<-function(ts_data,data_edges,alphaOrder,betaOrder,net,lead_lag_mat,gl
   # ts_data: matrix with rows edges and columns time
   # data_edges: dataframe with edge list, column one node from which edge starts (character type) column two node edge ends (character type)
   # alphaOrder: max lag
-  # betaOrder: vector of length as number of lags alphaOrder considered. Each entry give max stage neighbor to be considered for each lag
+  # betaOrder: vector of length as number of lags alphaOrder considered. Each entry give max stage neighbour to be considered for each lag
   # net: network resulting from edge list data_edges
+  # lead_lag_mat: matrix with rows and col corresponding to edge time series, entries showing leadingness of each time series over the other
   # globalalpha: if True, non edge-specific alpha parameters, but only lag specific alpha param
+  # lead_lag_weights: whether lead-lag matrix used as weights or not
   nedges <- nrow(ts_data)
   predt <- ncol(ts_data)-alphaOrder # lenght of time series observations considered when removing max lag
   # CREATE NAMES FOR COLS OF DESIGN MAT ACCORDING TO model PARAMETERS
   parNames <- NULL
-  #parLoc <- NULL
   for (ilag in 1:alphaOrder) {
     if(globalalpha){
       parNames <- c(parNames, paste("alpha", ilag, sep = ""))
-      #parLoc <- c(parLoc, "a")
     }else{
       for(edg in 1:nedges){
         parNames <- c(parNames, paste("alpha", ilag, "edge", edg, sep=""))
-        #parLoc <- c(parLoc, "a")
       }
     }
     if (betaOrder[ilag] > 0) {
       for (stag in 1:betaOrder[ilag]) {
         parNames <- c(parNames, paste("beta", ilag, ".stage",
                                       stag, sep = ""))
-        #parLoc <- c(parLoc, "b")
       }
     }
   }
@@ -61,35 +59,26 @@ design_mat<-function(ts_data,data_edges,alphaOrder,betaOrder,net,lead_lag_mat,gl
     for (ilag in 1:alphaOrder) {
       if(globalalpha){
         alphaLoc <- paste("alpha", ilag, sep = "")
-        #alphaLoc <- which(parLoc == "a")[ilag]
       }else{
-        #alphaLoc <- which(parLoc=="a")[nedges*(ilag-1)+edg]
-        
-        #print(nedges*(ilag-1)+edg)
-        #print(alphaLoc)
         alphaLoc <- paste("alpha", ilag, "edge", edg, sep = "")
-        #print(alphaLoc)
       }
       dmat[((predt * (edg - 1) + 1):(predt * edg)), alphaLoc] <-  as.vector(ts_data[edg,((alphaOrder +1 - ilag):(predt + (alphaOrder - ilag)))])
-      #dmat[((predt * (edg - 1) + 1):(predt * edg)), alphaLoc] <-  as.vector(ts_data[edg,((alphaOrder +1 - ilag):(ncol(ts_data)-ilag))])
     }
   }
   
   if (sum(betaOrder) > 0) {
-    #wei_mat <- lapply(1:max(betaOrder),function(x)matrix(0,nrow=nedges,ncol=nedges))
-    #wei_mat <- matrix(0,nrow = nedges,ncol = nedges)
     wei_mat <- lapply(1:max(betaOrder),function(x)Matrix(0,nedges,nedges,doDiag = FALSE))
     
   
     for (edg in 1:nedges){
       print(c("edge",edg))
       
-      # GET NEIGHBOR EDGES 
+      # GET NEIGHBOUR EDGES 
       nodess <- c(data_edges[edg,1],data_edges[edg,2]) # get nodes involved in edg
-      nei <- edge_neighbors(net,max(betaOrder),nodess) # for these nodess get the r-stage neighbors
+      nei <- edge_neighbors(net,max(betaOrder),nodess) # for these nodess get the r-stage neighbours
       
       
-      if (!lead_lag_weights){# if not using lead-lag matrix, equally weight neighbor edges (mean)
+      if (!lead_lag_weights){# if not using lead-lag matrix, equally weight neighbour edges (mean)
         wei <- sapply(nei, length)
         wei <- lapply(wei, function(x) rep(1/x,x))
       }else{ # else use lead-lag matrix
@@ -100,7 +89,6 @@ design_mat<-function(ts_data,data_edges,alphaOrder,betaOrder,net,lead_lag_mat,gl
               for (stagg in 1:betaOrder[ilagg]){
                 edg_loc <- edge_matching(data_edges, nei[[stagg]])
                 wei[[stagg]] <- lead_lag_mat[edg_loc,edg]
-                #wei[[stagg]] <- lead_lag_mat[edg_loc,edg]/sum(lead_lag_mat[edg_loc,edg])
               }
             }
           }
@@ -109,7 +97,7 @@ design_mat<-function(ts_data,data_edges,alphaOrder,betaOrder,net,lead_lag_mat,gl
 
       
       
-      # IF THERE ARE NEIGHBORS GET IN IF
+      # IF THERE ARE NEIGHBOURS GET IN IF
       if ((!is.null(nei)) & (length(nei) > 0)) { # check that are non empty lists
         
         
@@ -124,13 +112,13 @@ design_mat<-function(ts_data,data_edges,alphaOrder,betaOrder,net,lead_lag_mat,gl
               
               if ((!is.null(nei[[stag]]))){
   
-                # CASE WHERE stag-STAGE NEIGHBOR NODES MORE THAN ONE (TO NORMALISE RESPECTIVELY)
+                # CASE WHERE stag-STAGE NEIGHBOUR NODES MORE THAN ONE (TO NORMALISE RESPECTIVELY)
                 if (length(nei[[stag]]) > 1) {
-                  # get indexing/locations of neighboring edges of edg to cut df accordingly
+                  # get indexing/locations of neighbouring edges of edg to cut df accordingly
                   edg_loc <- edge_matching(data_edges, nei[[stag]])
                   
                   
-                  # CUT TIME SERIES MAT FOR COLUMNS CORRESPONDING TO NEIGHBOR NODES AND ROWS CORRESP TO LAGGED TIME SERIES
+                  # CUT TIME SERIES MAT FOR COLUMNS CORRESPONDING TO NEIGHBOUR NODES AND ROWS CORRESP TO LAGGED TIME SERIES
                   vts.cut <- ts_data[edg_loc,((alphaOrder + 1 - ilag):(predt + (alphaOrder - ilag)))]
                 
                   # FOR CASE WHERE VTS.CUT CONTAINS NA VALUES -> IMPUTATION
@@ -146,7 +134,7 @@ design_mat<-function(ts_data,data_edges,alphaOrder,betaOrder,net,lead_lag_mat,gl
                         if (!lead_lag_weights){ # do the re-normalisation only if not lead-lag weights
                           new.wei <- new.wei/sum(new.wei) # re-normalise after removing weights for NA
                         }
-                        sub.val <- vts.cut[which(!is.na(vts.cut[,t])),t] %*% new.wei # create from values of multiple time series without NAs at time t, a single value at time t by the weighte sum
+                        sub.val <- vts.cut[which(!is.na(vts.cut[,t])),t] %*% new.wei # create from values of multiple time series without NAs at time t, a single value at time t by the weighted sum
                         vts.cut[which(is.na(vts.cut[,t])),t] <- sub.val # fill in NA with weighted sum of time series at time t without NAs
                       }
                     }
@@ -156,40 +144,40 @@ design_mat<-function(ts_data,data_edges,alphaOrder,betaOrder,net,lead_lag_mat,gl
                   wei_mat[[stag]][edg_loc,edg] <- wei[[stag]]
                 }
                 
-                # CASE WHERE ONLY ONE stag-STAGE NEIGHBOR EDGE  (TO NORMALISE RESPECTIVELY)
+                # CASE WHERE ONLY ONE stag-STAGE NEIGHBOUR EDGE  (TO NORMALISE RESPECTIVELY)
                 else{
-                  # get indexing/locations of neighboring edges of edg to cut df accordingly
+                  # get indexing/locations of neighbouring edges of edg to cut df accordingly
                   edg_loc <- edge_matching(data_edges, nei[[stag]])
                   
-                  # CASE WHERE stag-STAGE NEIGHBOR EDGES IS EXACTLY ONE EDGE (NO NEED TO NORMALISE) AND NON NA VALUES
+                  # CASE WHERE stag-STAGE NEIGHBOUR EDGES IS EXACTLY ONE EDGE (NO NEED TO NORMALISE) AND NON NA VALUES
                   if ((length(nei[[stag]]) == 1) & (!is.na(nei[[stag]]))) {
                     vts.cut <- as.vector(ts_data[edg_loc,((alphaOrder + 1 - ilag):(predt + (alphaOrder - ilag)))])
-                    #and if this is missing at any time point, set to zero (cannot fill in with mean value of neighbors as previously as no other neighbors)
+                    #and if this is missing at any time point, set to zero (cannot fill in with mean value of neighbours as previously as no other neighbours)
                     vts.cut[is.na(vts.cut)] <- 0
                     dmat[((predt * (edg - 1) + 1):(predt * edg)), betaLoc] <- as.vector(t(vts.cut) * wei[[stag]])
                   }
                   
-                  # CASE WHERE stag-STAGE NEIGHBOR NAN VALUES
+                  # CASE WHERE stag-STAGE NEIGHBOUR NAN VALUES
                   else {
                     # set all to 0
                     dmat[((predt * (edg - 1) + 1):(predt * edg)), betaLoc] <- 0
                   }
                   wei_mat[[stag]][edg_loc,edg] <- wei[[stag]]
                 }
-              } # end if stag specific neighbors existing
+              } # end if stag specific neighbours existing
               
-              # case where no neighbors of stag size
+              # case where no neighbours of stag size
               else{
                 dmat[((predt * (edg - 1) + 1):(predt * edg)), betaLoc] <- 0
               }
               
             } # end for stage
-          } # end if check at least one neighbor considered
+          } # end if check at least one neighbour considered
         } # end for ilag
         
         
         
-      } # end if neighbors existing
+      } # end if neighbours existing
       
       
       else{
@@ -202,7 +190,6 @@ design_mat<-function(ts_data,data_edges,alphaOrder,betaOrder,net,lead_lag_mat,gl
       }
       
     } # END FOR LOOP OVER EDGES
-    #wei_mat <- lapply(wei_mat, as.matrix.csr) # make weight matrix a sparseM format for computational gain and storage/memory issues
   }else{ # END IF
     wei_mat <- NULL
   }
@@ -214,10 +201,13 @@ gnar_edge_fit <- function(ts_data,data_edges,alphaOrder,betaOrder,net,lead_lag_m
   # ts_data: dataframe with rows edges and columns time
   # data_edges: dataframe with edge list, column one node from which edge starts column two node edge ends
   # alphaOrder: max lag
-  # betaOrder: vector of length as number of lags alphaOrder considered. Each entry give max stage neighbor to be considered for each lag
+  # betaOrder: vector of length as number of lags alphaOrder considered. Each entry give max stage neighbour to be considered for each lag
   # net: network resulting from edge list data_edges
+  # lead_lag_mat: matrix with rows and col corresponding to edge time series, entries showing leadingness of each time series over the other
   # globalalpha: if True, non edge-specific alpha parameters, but only lag specific alpha param
-  # Returns: list with 1st element fitted model, 2nd element response vec, 3rd element design matrix
+  # lead_lag_weights: whether lead-lag matrix used as weights or not
+  # Returns: list with 1st element fitted model, 2nd element response vec, 3rd element design matrix, 4th element weight matrix used
+  
   des <- design_mat(ts_data=ts_data, data_edges=data_edges,alphaOrder=alphaOrder,betaOrder=betaOrder,net=net,lead_lag_mat=lead_lag_mat,
                     globalalpha=globalalpha,lead_lag_weights = lead_lag_weights)
   dmat <- des$dmat
@@ -237,7 +227,7 @@ gnar_edge_fit <- function(ts_data,data_edges,alphaOrder,betaOrder,net,lead_lag_m
 
 edge_matching <- function(edge_set, neig_edge_set){
   # edge_set: two column set of edges for data set
-  # neig_edge_set: igraph object, neighboring edges of some specified edge
+  # neig_edge_set: igraph object, neighbouring edges of some specified edge
   # Returns: list with indices/location of edges in original data/data edges of ts
   ids <- as_ids(neig_edge_set)
   split_ids <- strsplit(ids,split='|', fixed=TRUE)
@@ -248,9 +238,9 @@ edge_matching <- function(edge_set, neig_edge_set){
 
 edge_neighbors <- function(net, maxstage, stage_nodes){
   # net: igraph object 
-  # maxstage: max stage of neighbor edges to be considered
-  # stage_nodes: list of nodes corresponding to edge for which we seek neighbor edges
-  # Returns: list of lists, with r element containing neighbor edges for stage r
+  # maxstage: max stage of neighbour edges to be considered
+  # stage_nodes: list of nodes corresponding to edge for which we seek neighbour edges
+  # Returns: list of lists, with r element containing neighbour edges for stage r
   if (!is_connected(net)){ # if graph is not connected, identify connected component involving stage_nodes to find r-stage neighb
     net_comp <- decompose(net)
     for (i in 1:length(net_comp)){ # find subgraph (component) involving stage_nodes of interest
@@ -267,15 +257,15 @@ edge_neighbors <- function(net, maxstage, stage_nodes){
       neighb_edges_loc=list()
       for (node in stage_nodes){
         if (length(neighb_edges_loc)==0){
-          neighb_edges_loc<-incident(net, node, mode = "all")#all, out
+          neighb_edges_loc<-incident(net, node, mode = "all")#all, out, in
         }else{
-          neighb_edges_loc<-union(neighb_edges_loc,incident(net, node, mode = "all"))#all, out
+          neighb_edges_loc<-igraph::union(neighb_edges_loc,incident(net, node, mode = "all"))#all, out, in
         }
       }
       neighb_edges[[stag]] <- neighb_edges_loc
       # create new list of nodes to get their incident edges for stages>1
       stage_nodes <- setdiff(as.vector(ends(net,neighb_edges_loc)),stage_nodes)
-      # remove previous neighbor edge from previous stage from graph, not be included in next set of edges
+      # remove previous neighbour edge from previous stage from graph, not be included in next set of edges
       net <- net - neighb_edges_loc
       if (length(E(net))==0) break
     }
@@ -288,7 +278,11 @@ edge_neighbors <- function(net, maxstage, stage_nodes){
 
 
 gnar_edge_predict <- function(fit_mod,ts_data,alphaOrder,betaOrder,nedges,npred, wei_mat, set.noise=NULL, allcoefs=FALSE,globalalpha=TRUE){
+  # fit_mod: fitted model
   # ts_data: data used to train the model
+  # alphaOrder: max lag
+  # betaOrder: vector of length as number of lags alphaOrder considered. Each entry give max stage neighbour to be considered for each lag
+  # nedges: number of edges
   # npred: number of time stamps to be predicted
   # wei_mat: list with i element matrix with each column weights for each edge, at stage i
   if(!is.null(set.noise)){
@@ -311,14 +305,13 @@ gnar_edge_predict <- function(fit_mod,ts_data,alphaOrder,betaOrder,nedges,npred,
   }
   
   if(globalalpha){
-    #global alpha has one alpha per time lag
+    # global alpha has one alpha per time lag
     # alphaout: list with i element the list of hat(alphas) for lag i
     # betaout: list with i element the hat(betas) for lag i
     alphaout <-  vector(mode="list", length=alphaOrder)
     betaout <- as.list(rep(0,length=alphaOrder))
     count <- 1
     for(ilag in 1:alphaOrder){
-      #alphaout[[ilag]] <- rep(coefvec[count], nedges)
       alphaout[[ilag]] <- coefvec[count]
       
       if(betaOrder[ilag]>0){
@@ -346,8 +339,6 @@ gnar_edge_predict <- function(fit_mod,ts_data,alphaOrder,betaOrder,nedges,npred,
   
   # part of data used for training, to be needed for prediction of t+1
   xx.init <- ts_data[,(ncol(ts_data)-alphaOrder+1):ncol(ts_data)]
-  #ntimedep <- alphaOrder
-  #stopifnot(nrow(xx.init)==ntimedep)
   
   # matrix with first columns data for training from xx.init and last columns the predictions
   xx.gen <- matrix(NA, ncol=npred+alphaOrder, nrow=nedges)
@@ -381,18 +372,19 @@ gnar_edge_predict <- function(fit_mod,ts_data,alphaOrder,betaOrder,nedges,npred,
         }
       }
     }
-    xx.gen[,tpred] <- time.forecast+as.matrix(nei.forecast)#+rnorm(n=nedges, mean=0, sd=sig)
+    xx.gen[,tpred] <- time.forecast+as.matrix(nei.forecast)
   }
-  # if(nsim==1){
-  #   newser <- as.ts(t(xx.gen[(alphaOrder+1):(nsim+alphaOrder),]), start=1, end=nsim)
-  # }else{
-  #   newser <- as.ts(xx.gen[(alphaOrder+1):(nsim+alphaOrder),], start=1, end=nsim)
-  # }
   
   return(xx.gen)
 }
 
 gnar_edge_sim <- function(n=200, net, alphaParams, betaParams, sigma=1, meann=0, nedges,data_edges){
+  # n: number of time stamps
+  # net: network on whose edges are simulated
+  # alphaParams: alpha parameters
+  # betaParams: beta parameters
+  # nedges: number of edges
+  # data_edges: dataframe with edge list, column one node from which edge starts (character type) column two node edge ends (character type)
   
   max.nei <- max(unlist(lapply(betaParams, length)))
   
@@ -401,21 +393,15 @@ gnar_edge_sim <- function(n=200, net, alphaParams, betaParams, sigma=1, meann=0,
   
   #seed the process from normal dist with mean 0 and sigma as given
   #do this for as many time points as needed for alpha
-  #ntimedep
   lags <- length(alphaParams)
   # initialise time series to use lags according to max lag size, to produce next time steps
   xx.init <- matrix(rnorm(nedges*lags, mean=0, sd=sigma), nrow=nedges, ncol=lags)
   
   xx.gen <- matrix(NA, ncol=n+50, nrow=nedges) # rows edges, columns time series 
   xx.gen[,1:lags] <- xx.init
-  # print(length(alphaParams))
-  # print("just before the tt indexed loop")
+  
   for(tt in (lags+1):(n+50)){
-    # print(tt)
-    # print(alphaParams)
-    # print(rev(alphaParams))
     for(ilag in 1:lags){
-      #print(c("1st print",tt,ilag))
       if(ilag==1){
         time.forecast <- alphaParams[[ilag]]*xx.gen[,(tt-ilag)]
       }else{
@@ -427,7 +413,6 @@ gnar_edge_sim <- function(n=200, net, alphaParams, betaParams, sigma=1, meann=0,
     nei.forecast <- 0
     beta.pos <- NULL
     for(ilag in 1:lags){
-      #print(c("2nd print",ilag))
       bb <- length(betaParams[[ilag]])
       if(bb>0){
         for(dd in 1:bb){
@@ -439,24 +424,23 @@ gnar_edge_sim <- function(n=200, net, alphaParams, betaParams, sigma=1, meann=0,
     xx.gen[,tt] <- time.forecast+nei.forecast+rnorm(nedges, mean=meann, sd=sigma)
   }
   return(xx.gen[,51:(n+50)])
-  # NOTE: maybe way noise added in the model not correct!
 }
 
 nei_wei_mat <- function(net,data.edges,max.stage,nedges){
   # net: igraph network
   # data.edges: edge list for net
-  # max.stage: (scalar) max r-stage neighbor edges
+  # max.stage: (scalar) max r-stage neighbour edges
   # nedges: (scalar) number of edges
   # Rerurns: list of r-stage matrices, each matrix of size nedges x nedges, 
-  # with each column j corresponding to neighbors edges of edge j with equal weights 
+  # with each column j corresponding to neighbours edges of edge j with equal weights 
   wei_mat <- lapply(1:max.stage,function(x)matrix(0,nrow=nedges,ncol=nedges))
   for (edg in 1:nedges){
     #print(c("edges",edg))
-    # GET NEIGHBOR EDGES 
+    # GET NEIGHBOUR EDGES 
     nodess <- c(data.edges[edg,1],data.edges[edg,2]) # get nodes involved in edg
-    nei <- edge_neighbors(net,max.stage,nodess) # for these nodess get the r-stage neighbors
+    nei <- edge_neighbors(net,max.stage,nodess) # for these nodess get the r-stage neighbours
     
-    # equally weight neighbor edges (mean)
+    # equally weight neighbour edges (mean)
     wei <- sapply(nei, length)
     wei <- lapply(wei, function(x) rep(1/x,x))
     for (stag in 1:max.stage){
