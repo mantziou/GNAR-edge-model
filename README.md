@@ -1,5 +1,5 @@
 # GNAR-edge-model
-Code and synthetic data experiments for the paper "GNAR-edge model: A network autoregressive model for networks with time varying edge weights", arXiv pre-print:
+Code and synthetic data experiments for the paper "The GNAR-edge model: A network autoregressive model for networks with time varying edge weights", arXiv pre-print:
 
 Main code (ar_ts_edges.R script) for GNAR-edge model is modification of original GNAR model code by Knight et al. 2019, to address the problem when time series are observed on the edges of a network.
 
